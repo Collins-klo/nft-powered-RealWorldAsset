@@ -19,12 +19,6 @@ export const navlinks = [
     link: '/bonds',
     
   },
-  {
-    name: 'profile',
-    imgUrl: profile,
-    link: '/profile',
-    
-  },
 ];
 
 const estateImg1 = "https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3" // Luxury apartment

@@ -2,30 +2,50 @@
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import Link from 'next/link';
 import { useAccount } from 'wagmi';
-import { useStateContext } from '../context';
 import { useEffect, useState } from 'react';
+import { contractFunctions } from '../utils/contract';
 
 const Home = () => {
-  const { isConnected } = useAccount();
-  // const { getUserContributions } = useStateContext();
+  const { isConnected, address } = useAccount();
   const [userInvestments, setUserInvestments] = useState([]);
+  const [assetCounts, setAssetCounts] = useState({ bonds: 0, estates: 0 });
 
   useEffect(() => {
-    const fetchInvestments = async () => {
-      if (isConnected) {
-        // const investments = await getUserContributions();
-        // setUserInvestments(investments);
-        setUserInvestments([
-          { name: 'Government Treasury Bonds', assetType: 'Bond' },
-          { name: 'Corporate Bonds Portfolio', assetType: 'Bond' },
-          { name: 'Municipal Bonds Fund', assetType: 'Bond' },
-          { name: 'High-Yield Corporate Bonds', assetType: 'Bond' },
-          { name: 'Bond 5', assetType: 'Bond' },
-        ]);
+    const fetchData = async () => {
+      try {
+        // Fetch asset counts
+        const allAssets = await contractFunctions.getAllAssets();
+        const bonds = allAssets.filter(asset => asset.assetType === 1).length;
+        const estates = allAssets.filter(asset => asset.assetType === 0).length;
+        setAssetCounts({ bonds, estates });
+
+        // Fetch user investments if connected
+        if (isConnected && address) {
+          const userAssets = [];
+          for (const asset of allAssets) {
+            const userShares = await contractFunctions.getBuyerShares(asset.id, address);
+            if (userShares > 0) {
+              userAssets.push({
+                name: asset.assetTitle,
+                assetType: asset.assetType === 0 ? 'Real Estate' : 'Bond',
+                shares: userShares,
+                value: (userShares * parseFloat(asset.sharePrice)).toFixed(2)
+              });
+            }
+          }
+          setUserInvestments(userAssets);
+        }
+      } catch (error) {
+        console.error('Error fetching data:', error);
       }
     };
-    fetchInvestments();
-  }, [isConnected]);
+
+    if (isConnected) {
+      fetchData();
+    } else {
+      setUserInvestments([]);
+    }
+  }, [isConnected, address]);
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] sticky top-0">
@@ -81,7 +101,7 @@ const Home = () => {
                   </div>
                   <div className="flex justify-between items-center">
                     <button className="hover:underline">VIEW ALL BONDS</button>
-                    <span className="bg-white/20 px-3 py-1 rounded-full">8</span>
+                    <span className="bg-white/20 px-3 py-1 rounded-full">{assetCounts.bonds}</span>
                   </div>
                 </div>
               </Link>
@@ -101,7 +121,7 @@ const Home = () => {
                   </div>
                   <div className="flex justify-between items-center">
                     <button className="hover:underline">VIEW ALL ESTATES</button>
-                    <span className="bg-black/10 px-3 py-1 rounded-full">13</span>
+                    <span className="bg-black/10 px-3 py-1 rounded-full">{assetCounts.estates}</span>
                   </div>
                 </div>
               </Link>
@@ -120,14 +140,20 @@ const Home = () => {
                     </div>
                   ) : userInvestments.length === 0 ? (
                     <div className="text-gray-400 text-center py-8">
-                      No investments
+                      No investments yet
                     </div>
                   ) : (
                     <div className="space-y-2">
                       {userInvestments.slice(0, 3).map((investment, index) => (
                         <div key={index} className="flex justify-between items-center text-white">
-                          <span className="truncate">{investment.name}</span>
-                          <span className="text-gray-400">{investment.assetType}</span>
+                          <div className="flex flex-col">
+                            <span className="truncate">{investment.name}</span>
+                            <span className="text-xs text-gray-400">{investment.shares} shares</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-gray-400">{investment.assetType}</span>
+                            <div className="text-xs text-gray-500">${investment.value}</div>
+                          </div>
                         </div>
                       ))}
                       {userInvestments.length > 3 && (

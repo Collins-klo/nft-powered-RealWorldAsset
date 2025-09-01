@@ -6,11 +6,20 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "forge:build": "forge build",
+    "forge:test": "forge test",
+    "forge:test:verbose": "forge test -vvv",
+    "forge:test:gas": "forge test --gas-report",
+    "forge:deploy": "forge script",
+    "forge:verify": "forge verify-contract",
+    "anvil": "anvil",
+    "anvil:fork": "anvil --fork-url"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^5.2.0",
     "@rainbow-me/rainbowkit": "^2.2.4",
+    "@supabase/supabase-js": "^2.56.1",
     "@tanstack/react-query": "^5.71.1",
     "ethers": "^5.7.2",
     "next": "15.1.7",

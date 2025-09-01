@@ -1,198 +1,207 @@
-"use client"
+'use client';
 
-import { useState } from "react";
-import { money } from "@public/assets/icons";
-import CustomButton from "@components/CustomButton";
-import FormField from "@components/FormField";
-import { checkIfImage } from "@utils";
-import Image from "@node_modules/next/image";
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Load from "@components/loader";
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount, useWalletClient } from 'wagmi';
-import { ethers } from 'ethers';
-import TokenizedAssets from '@contracts/contracts.json';
+import { useAccount } from 'wagmi';
+import { contractFunctions, AssetType, clearWalletCache } from '../../../utils/contract';
+import FormField from '../../../components/FormField';
+import CustomButton from '../../../components/CustomButton';
 
 const CreateEstate = () => {
   const router = useRouter();
-  const { address } = useAccount();
-  const { data: walletClient } = useWalletClient();
+  const { isConnected, address } = useAccount();
   const [isLoading, setIsLoading] = useState(false);
   const [form, setForm] = useState({
-    companyName: '',
+    title: '',
     description: '',
-    target: '',
-    monthlyRentEstimate: '',
+    valuation: '',
     deadline: '',
-    image1: '',
-    image2: '',
-    image3: '',
+    image: '',
+    totalShares: '',
+    sharePrice: '',
+    location: '',
+    propertyType: 'Residential'
   });
 
+  // Clear wallet cache when wallet changes
+  useEffect(() => {
+    clearWalletCache();
+  }, [address]);
+
   const handleFormFieldChange = (fieldName, e) => {
-    setForm({ ...form, [fieldName]: e.target.value })
-  }
+    setForm({ ...form, [fieldName]: e.target.value });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!address) {
+    if (!isConnected) {
       alert('Please connect your wallet first');
       return;
     }
 
-    if (!walletClient) {
-      alert('Please connect your wallet and wait for it to be ready');
-      return;
-    }
-
-    setIsLoading(true);
     try {
-      // Convert target amount to wei
-      const targetAmount = ethers.utils.parseUnits(form.target, 18);
+      setIsLoading(true);
       
-      // Convert monthly rent estimate to wei
-      const monthlyRentEstimate = ethers.utils.parseUnits(form.monthlyRentEstimate, 18);
-      
-      // Convert deadline to timestamp
-      const deadline = Math.floor(new Date(form.deadline).getTime() / 1000);
-      
-      // Create REIT through contract
-      const contract = new ethers.Contract(
-        process.env.NEXT_PUBLIC_CONTRACT_ADDRESS,
-        TokenizedAssets.abi,
-        walletClient
-      );
+      // Check if user is owner
+      const isOwner = await contractFunctions.isOwner(address);
+      if (!isOwner) {
+        alert('Only contract owner can create assets');
+        return;
+      }
 
-      console.log('Creating REIT with params:', {
-        owner: address,
-        companyName: form.companyName,
-        description: form.description,
-        targetAmount: targetAmount.toString(),
-        monthlyRentEstimate: monthlyRentEstimate.toString(),
-        deadline: deadline,
-        images: [form.image1, form.image2, form.image3]
-      });
-
-      const tx = await contract.createREIT(
-        address,
-        form.companyName,
+      // Convert deadline to timestamp (days from now)
+      const deadlineTimestamp = Math.floor(Date.now() / 1000) + (parseInt(form.deadline) * 24 * 60 * 60);
+      
+      // Create asset
+      const tx = await contractFunctions.addAsset(
+        AssetType.RealEstate,
+        form.title,
         form.description,
-        targetAmount,
-        monthlyRentEstimate,
-        deadline,
-        [form.image1, form.image2, form.image3]
+        form.valuation,
+        deadlineTimestamp,
+        form.image,
+        parseInt(form.totalShares),
+        form.sharePrice,
+        '0x0000000000000000000000000000000000000000' // Native token (ETH)
       );
 
-      console.log('Transaction sent:', tx.hash);
-      await tx.wait();
-      console.log('Transaction confirmed');
-      router.push('/');
+      alert('Estate asset created successfully!');
+      router.push('/admin');
     } catch (error) {
-      console.error('Error creating REIT:', error);
-      alert('Failed to create REIT. Please try again.');
+      console.error('Error creating estate:', error);
+      alert('Error creating estate: ' + error.message);
     } finally {
       setIsLoading(false);
     }
-  } 
+  };
 
   return (
-    <div className="w-5/6 m-auto bg-[#0a0a0a] rounded-[15px] flex justify-center 
-    flex-col rounded-b-[10px] px-[100px] py-[40px] min-h-screen">
-      {isLoading && <Load />}
-      <div className="flex justify-end pb-10"> <ConnectButton /> </div>
-
-      <div className="flex justify-center items-center w-64 p-[15px] bg-[#322543]
-      rounded-[10px] m-auto">
-        <h1 className="font-epilogue font-bold text-[25px] text-white leading-[38px]">
-          Create New REIT
-        </h1>
-      </div>
-
-      <form onSubmit={handleSubmit} className="w-full mt-[65px] flex flex-col gap-[30px]">
-
-        <FormField
-          labelName="Company Name *"
-          placeholder="Enter company name"
-          inputType="text"
-          value={form.companyName}
-          handleChange={(e) => handleFormFieldChange('companyName', e)}
-        />
-
-        <FormField
-          labelName="Description *"
-          placeholder="Write about the REIT in detail"
-          isTextArea
-          value={form.description}
-          handleChange={(e) => handleFormFieldChange('description', e)}
-        />
-
-        <div className="w-full flex justify-start items-center p-4 bg-[#042f2e] h-[100px]
-        rounded-[10px]">
-          <Image src={money} alt='money' width={28} height={28} 
-           className={'object-contain'} />
-          <h4 className="font-epilogue font-bold text-[18px] text-white ml-[20px]">
-            You will get 99% of the total amount</h4> 
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-6">
+      <div className="max-w-2xl mx-auto bg-gray-800 rounded-3xl shadow-xl p-6 border border-gray-700">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-xl font-bold text-white">Create Real Estate Asset</h1>
+          <ConnectButton />
         </div>
 
-        <FormField
-          labelName="Target Amount (USDT) *" 
-          placeholder="1000000"
-          inputType="number"
-          value={form.target}
-          handleChange={(e) => handleFormFieldChange('target', e)}
-        />
+        {isConnected ? (
+          <>
+            <div className="bg-blue-900/20 border border-blue-700 p-4 rounded-lg mb-6">
+              <h3 className="text-sm font-medium text-blue-300 mb-2">Important Note</h3>
+              <p className="text-blue-200 text-sm">
+                All monetary values should be entered in ETH, not USD. For example, if you want a share to cost $100, 
+                you would need to convert that to ETH based on current exchange rates.
+              </p>
+            </div>
+            <form onSubmit={handleSubmit} className="space-y-6">
+            <FormField
+              labelName="Asset Title *"
+              placeholder="Enter asset title"
+              inputType="text"
+              value={form.title}
+              handleChange={(e) => handleFormFieldChange('title', e)}
+            />
 
-        <FormField
-          labelName="Monthly Rent Estimate (USDT) *"
-          placeholder="5000"
-          inputType="number"
-          value={form.monthlyRentEstimate}
-          handleChange={(e) => handleFormFieldChange('monthlyRentEstimate', e)}
-        />
+            <FormField
+              labelName="Description *"
+              placeholder="Enter asset description"
+              isTextArea
+              value={form.description}
+              handleChange={(e) => handleFormFieldChange('description', e)}
+            />
 
-        <FormField
-          labelName="End Date *"
-          placeholder="End Date"
-          inputType="date"
-          value={form.deadline}
-          handleChange={(e) => handleFormFieldChange('deadline', e)}
-        />
+            <FormField
+              labelName="Valuation (ETH) *"
+              placeholder="Enter total valuation in ETH (e.g., 10)"
+              inputType="number"
+              value={form.valuation}
+              handleChange={(e) => handleFormFieldChange('valuation', e)}
+              step="0.1"
+            />
 
-        <FormField
-          labelName="Estate Image 1 *"
-          placeholder="Place image URL of your estate"
-          inputType="url"
-          value={form.image1}
-          handleChange={(e) => handleFormFieldChange('image1', e)}
-        />
+            <FormField
+              labelName="Deadline (days from now) *"
+              placeholder="Enter deadline in days"
+              inputType="number"
+              value={form.deadline}
+              handleChange={(e) => handleFormFieldChange('deadline', e)}
+            />
 
-        <FormField
-          labelName="Estate Image 2 *"
-          placeholder="Place image URL of your estate"
-          inputType="url"
-          value={form.image2}
-          handleChange={(e) => handleFormFieldChange('image2', e)}
-        />
+            <FormField
+              labelName="Image URL"
+              placeholder="Enter image URL"
+              inputType="url"
+              value={form.image}
+              handleChange={(e) => handleFormFieldChange('image', e)}
+            />
 
-        <FormField
-          labelName="Estate Image 3 *"
-          placeholder="Place image URL of your estate"
-          inputType="url"
-          value={form.image3}
-          handleChange={(e) => handleFormFieldChange('image3', e)}
-        />
+            <FormField
+              labelName="Total Shares *"
+              placeholder="Enter total number of shares"
+              inputType="number"
+              value={form.totalShares}
+              handleChange={(e) => handleFormFieldChange('totalShares', e)}
+            />
 
-        <div className="flex justify-center items-center mt-[40px]">
-          <CustomButton
-            btnType="submit"
-            title="Create REIT"
-            styles="bg-[#042f2e]"
-          />
-        </div>  
-      </form>
+            <FormField
+              labelName="Share Price (ETH) *"
+              placeholder="Enter price per share in ETH (e.g., 0.01)"
+              inputType="number"
+              value={form.sharePrice}
+              handleChange={(e) => handleFormFieldChange('sharePrice', e)}
+              step="0.001"
+            />
+
+            <FormField
+              labelName="Location"
+              placeholder="Enter property location"
+              inputType="text"
+              value={form.location}
+              handleChange={(e) => handleFormFieldChange('location', e)}
+            />
+
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Property Type
+              </label>
+              <select
+                value={form.propertyType}
+                onChange={(e) => handleFormFieldChange('propertyType', e)}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="Residential">Residential</option>
+                <option value="Commercial">Commercial</option>
+                <option value="Industrial">Industrial</option>
+                <option value="Retail">Retail</option>
+                <option value="Mixed-Use">Mixed-Use</option>
+              </select>
+            </div>
+
+            <div className="flex gap-4">
+              <CustomButton
+                btnType="submit"
+                title={isLoading ? 'Creating...' : 'Create Estate Asset'}
+                styles="bg-blue-600 hover:bg-blue-700"
+                disabled={isLoading}
+              />
+              <CustomButton
+                btnType="button"
+                title="Cancel"
+                styles="bg-gray-600 hover:bg-gray-700"
+                handleClick={() => router.push('/admin')}
+              />
+            </div>
+          </form>
+          </>
+        ) : (
+          <div className="text-center py-10">
+            <p className="text-gray-400 text-lg">Please connect your wallet to create estate assets</p>
+          </div>
+        )}
+      </div>
     </div>
-  )
-}
+  );
+};
 
 export default CreateEstate;
